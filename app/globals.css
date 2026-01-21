@@ -8,6 +8,14 @@
 @import "tailwindcss";
 
 /* ============================================================
+   CONFIGURACIÓN DE TAILWIND V4 - DARK MODE
+   ============================================================
+   Por defecto Tailwind v4 usa prefers-color-scheme (sistema).
+   Con esta configuración usamos la clase .dark en el <html>
+*/
+@variant dark (&:where(.dark, .dark *));
+
+/* ============================================================
    VARIABLES CSS PERSONALIZADAS
    ============================================================ */
 :root {
@@ -15,12 +23,10 @@
   --foreground: #171717;
 }
 
-/* Tema oscuro (automático según preferencias del sistema) */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Tema oscuro (controlado por clase .dark en <html>) */
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
 }
 
 /* ============================================================

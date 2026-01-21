@@ -13,4 +13,5 @@
 
 export { useProfesionales } from './use-profesionales';
 export { useServicios } from './use-servicios';
+export { useThemeToggle } from './use-theme-toggle';
 

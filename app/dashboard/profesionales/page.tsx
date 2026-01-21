@@ -1,89 +1,251 @@
-/**
- * ============================================================
- * PÁGINA - PROFESIONALES (Lista + CRUD)
- * ============================================================
- * 
- * ESTA ES TU GUÍA PRINCIPAL. Estudia este archivo para entender:
- * 1. Cómo usar hooks para cargar datos
- * 2. Cómo manejar estados (loading, error, success)
- * 3. Cómo mostrar datos en una tabla
- * 4. Cómo implementar acciones (crear, eliminar)
- * 
- * FLUJO DE DATOS:
- * Página → Hook → Servicio → HTTP Client → Backend API
- */
-
 'use client';
 
-import { useState } from 'react';
-import { useProfesionales } from '@/lib/hooks';
-import type { CreateProfesionalDto } from '@/lib/types';
-import { Users, Plus, Trash2, RefreshCw, X } from 'lucide-react';
+/**
+ * ============================================================
+ * PÁGINA - PROFESIONALES (CRUD Completo)
+ * ============================================================
+ * 
+ * Gestión completa de profesionales con:
+ * - Tabla con TanStack Table
+ * - Búsqueda y ordenamiento
+ * - Modal para crear/editar (mismo componente)
+ * - Modal de confirmación para eliminar
+ * - Exportación a PDF y Excel
+ * - Soporte completo para dark mode
+ */
 
+import { useState, useMemo } from 'react';
+import { createColumnHelper } from '@tanstack/react-table';
+import { useProfesionales } from '@/lib/hooks';
+import { DataTable } from '@/components/ui/data-table';
+import { Modal, ConfirmModal } from '@/components/ui/modal';
+import { exportToPDF, exportToExcel } from '@/lib/utils';
+import type { Profesional, CreateProfesionalDto, UpdateProfesionalDto } from '@/lib/types';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { 
+  Users, 
+  Plus, 
+  Pencil, 
+  Trash2, 
+  RefreshCw,
+  Loader2
+} from 'lucide-react';
+
+// ============================================================
+// SCHEMA DE VALIDACIÓN CON ZOD
+// ============================================================
+const profesionalSchema = z.object({
+  nombreCompleto: z.string().min(3, 'El nombre debe tener al menos 3 caracteres'),
+  documentoIdentidad: z.string().min(6, 'El documento debe tener al menos 6 caracteres'),
+  telefono: z.string().optional(),
+  direccion: z.string().optional(),
+  fechaNacimiento: z.string().optional(),
+  usaHorarioNegocio: z.boolean().optional().default(true),
+});
+
+type ProfesionalFormData = z.infer<typeof profesionalSchema>;
+
+// ============================================================
+// COLUMN HELPER PARA LA TABLA
+// ============================================================
+const columnHelper = createColumnHelper<Profesional>();
+
+// ============================================================
+// COMPONENTE PRINCIPAL
+// ============================================================
 export default function ProfesionalesPage() {
-  // ============================================================
-  // HOOK: Carga y maneja los profesionales
-  // ============================================================
+  // Hook de profesionales
   const { 
-    profesionales,    // Array de profesionales
-    loading,          // true mientras carga
-    error,            // Error si falla
-    refetch,          // Función para recargar
-    createProfesional,// Función para crear
-    deleteProfesional // Función para eliminar
+    profesionales,
+    loading,
+    error,
+    refetch,
+    createProfesional,
+    updateProfesional,
+    deleteProfesional 
   } = useProfesionales();
 
-  // ============================================================
-  // ESTADO LOCAL: Para el modal de crear
-  // ============================================================
-  const [showModal, setShowModal] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  // Estados para modales
+  const [showFormModal, setShowFormModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedProfesional, setSelectedProfesional] = useState<Profesional | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // ============================================================
-  // HANDLER: Crear nuevo profesional
-  // ============================================================
-  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setCreating(true);
-    setFormError(null);
-
-    // Obtener datos del formulario
-    const formData = new FormData(e.currentTarget);
-    const data: CreateProfesionalDto = {
-      nombreCompleto: formData.get('nombreCompleto') as string,
-      documentoIdentidad: formData.get('documentoIdentidad') as string,
-      telefono: formData.get('telefono') as string || undefined,
-      direccion: formData.get('direccion') as string || undefined,
+  // React Hook Form
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm({
+    resolver: zodResolver(profesionalSchema),
+    defaultValues: {
+      nombreCompleto: '',
+      documentoIdentidad: '',
+      telefono: '',
+      direccion: '',
       usaHorarioNegocio: true,
-    };
+    },
+  });
 
+  // ============================================================
+  // DEFINICIÓN DE COLUMNAS
+  // ============================================================
+  const columns = useMemo(() => [
+    columnHelper.accessor('nombreCompleto', {
+      header: 'Nombre',
+      cell: (info) => (
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+            <span className="text-blue-600 dark:text-blue-400 font-medium">
+              {info.getValue().charAt(0).toUpperCase()}
+            </span>
+          </div>
+          <span className="font-medium">{info.getValue()}</span>
+        </div>
+      ),
+    }),
+    columnHelper.accessor('documentoIdentidad', {
+      header: 'Documento',
+      cell: (info) => <span className="font-mono">{info.getValue()}</span>,
+    }),
+    columnHelper.accessor('telefono', {
+      header: 'Teléfono',
+      cell: (info) => info.getValue() || <span className="text-gray-400 dark:text-gray-500">-</span>,
+    }),
+    columnHelper.accessor('direccion', {
+      header: 'Dirección',
+      cell: (info) => info.getValue() || <span className="text-gray-400 dark:text-gray-500">-</span>,
+    }),
+    columnHelper.accessor('usaHorarioNegocio', {
+      header: 'Horario',
+      cell: (info) => (
+        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+          info.getValue()
+            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+            : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+        }`}>
+          {info.getValue() ? 'Negocio' : 'Personalizado'}
+        </span>
+      ),
+    }),
+    columnHelper.display({
+      id: 'actions',
+      header: 'Acciones',
+      cell: (info) => (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handleEdit(info.row.original)}
+            className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+            title="Editar"
+          >
+            <Pencil size={16} />
+          </button>
+          <button
+            onClick={() => handleDeleteClick(info.row.original)}
+            className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+            title="Eliminar"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+      ),
+    }),
+  ], []);
+
+  // ============================================================
+  // HANDLERS
+  // ============================================================
+  
+  // Abrir modal para crear
+  const handleCreate = () => {
+    setSelectedProfesional(null);
+    reset({
+      nombreCompleto: '',
+      documentoIdentidad: '',
+      telefono: '',
+      direccion: '',
+      usaHorarioNegocio: true,
+    });
+    setShowFormModal(true);
+  };
+
+  // Abrir modal para editar
+  const handleEdit = (profesional: Profesional) => {
+    setSelectedProfesional(profesional);
+    reset({
+      nombreCompleto: profesional.nombreCompleto,
+      documentoIdentidad: profesional.documentoIdentidad,
+      telefono: profesional.telefono || '',
+      direccion: profesional.direccion || '',
+      usaHorarioNegocio: profesional.usaHorarioNegocio,
+    });
+    setShowFormModal(true);
+  };
+
+  // Abrir modal de confirmación para eliminar
+  const handleDeleteClick = (profesional: Profesional) => {
+    setSelectedProfesional(profesional);
+    setShowDeleteModal(true);
+  };
+
+  // Enviar formulario (crear o editar)
+  const onSubmit = async (data: ProfesionalFormData) => {
+    setIsSubmitting(true);
     try {
-      await createProfesional(data);
-      setShowModal(false);
-      // El hook ya recarga la lista automáticamente
+      if (selectedProfesional) {
+        // Editar
+        await updateProfesional(selectedProfesional.id, data as UpdateProfesionalDto);
+      } else {
+        // Crear
+        await createProfesional(data as CreateProfesionalDto);
+      }
+      setShowFormModal(false);
+      reset();
     } catch (err) {
-      setFormError((err as Error).message || 'Error al crear profesional');
+      console.error('Error:', err);
     } finally {
-      setCreating(false);
+      setIsSubmitting(false);
     }
   };
 
-  // ============================================================
-  // HANDLER: Eliminar profesional
-  // ============================================================
-  const handleDelete = async (id: number, nombre: string) => {
-    // Confirmar antes de eliminar
-    if (!confirm(`¿Estás seguro de eliminar a ${nombre}?`)) {
-      return;
-    }
-
+  // Confirmar eliminación
+  const handleConfirmDelete = async () => {
+    if (!selectedProfesional) return;
+    setIsSubmitting(true);
     try {
-      await deleteProfesional(id);
-      // El hook ya recarga la lista automáticamente
+      await deleteProfesional(selectedProfesional.id);
+      setShowDeleteModal(false);
+      setSelectedProfesional(null);
     } catch (err) {
-      alert('Error al eliminar: ' + (err as Error).message);
+      console.error('Error:', err);
+    } finally {
+      setIsSubmitting(false);
     }
+  };
+
+  // Exportar a Excel
+  const handleExportExcel = () => {
+    const exportColumns = [
+      { header: 'Nombre', accessorKey: 'nombreCompleto' },
+      { header: 'Documento', accessorKey: 'documentoIdentidad' },
+      { header: 'Teléfono', accessorKey: 'telefono' },
+      { header: 'Dirección', accessorKey: 'direccion' },
+    ];
+    exportToExcel(profesionales, exportColumns, 'profesionales');
+  };
+
+  // Exportar a PDF
+  const handleExportPDF = () => {
+    const exportColumns = [
+      { header: 'Nombre', accessorKey: 'nombreCompleto' },
+      { header: 'Documento', accessorKey: 'documentoIdentidad' },
+      { header: 'Teléfono', accessorKey: 'telefono' },
+      { header: 'Dirección', accessorKey: 'direccion' },
+    ];
+    exportToPDF(profesionales, exportColumns, 'profesionales', 'Lista de Profesionales');
   };
 
   // ============================================================
@@ -92,10 +254,15 @@ export default function ProfesionalesPage() {
   return (
     <div className="space-y-6">
       {/* ========== HEADER ========== */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Profesionales</h2>
-          <p className="text-gray-600">Gestiona los barberos de tu negocio</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <Users className="text-blue-600" />
+            Profesionales
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">
+            Gestiona los barberos y profesionales de tu negocio
+          </p>
         </div>
         
         <div className="flex items-center gap-2">
@@ -103,257 +270,208 @@ export default function ProfesionalesPage() {
           <button
             onClick={refetch}
             disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            className="p-2 border border-gray-300 dark:border-gray-600 rounded-lg 
+              hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
             title="Recargar lista"
           >
-            <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+            <RefreshCw size={20} className={`text-gray-600 dark:text-gray-400 ${loading ? 'animate-spin' : ''}`} />
           </button>
 
           {/* Botón Crear */}
           <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            onClick={handleCreate}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg 
+              hover:bg-blue-700 transition-colors font-medium"
           >
             <Plus size={20} />
-            Nuevo Profesional
+            <span className="hidden sm:inline">Nuevo Profesional</span>
           </button>
         </div>
       </div>
 
-      {/* ========== ESTADO: CARGANDO ========== */}
-      {loading && (
-        <div className="bg-white rounded-lg shadow p-8 text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto" />
-          <p className="mt-4 text-gray-600">Cargando profesionales...</p>
-        </div>
-      )}
-
-      {/* ========== ESTADO: ERROR ========== */}
+      {/* ========== ERROR STATE ========== */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-800 font-medium">Error al cargar datos</p>
-          <p className="text-red-600 text-sm mt-1">{error.message}</p>
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+          <p className="text-red-800 dark:text-red-400 font-medium">Error al cargar datos</p>
+          <p className="text-red-600 dark:text-red-300 text-sm mt-1">{error.message}</p>
           <button
             onClick={refetch}
-            className="mt-2 text-red-600 underline hover:text-red-800"
+            className="mt-2 text-red-600 dark:text-red-400 underline hover:no-underline"
           >
             Reintentar
           </button>
         </div>
       )}
 
-      {/* ========== ESTADO: SIN DATOS ========== */}
+      {/* ========== EMPTY STATE ========== */}
       {!loading && !error && profesionales.length === 0 && (
-        <div className="bg-white rounded-lg shadow p-8 text-center">
-          <Users size={48} className="mx-auto text-gray-400" />
-          <h3 className="mt-4 text-lg font-medium text-gray-900">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center">
+          <Users size={48} className="mx-auto text-gray-400 dark:text-gray-500" />
+          <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-white">
             No hay profesionales
           </h3>
-          <p className="mt-2 text-gray-600">
+          <p className="mt-2 text-gray-600 dark:text-gray-400">
             Empieza agregando tu primer profesional
           </p>
           <button
-            onClick={() => setShowModal(true)}
-            className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+            onClick={handleCreate}
+            className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
           >
             Agregar Profesional
           </button>
         </div>
       )}
 
-      {/* ========== ESTADO: CON DATOS - TABLA ========== */}
-      {!loading && !error && profesionales.length > 0 && (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Nombre
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Documento
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Teléfono
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Dirección
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Horario
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Acciones
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {profesionales.map((profesional) => (
-                <tr key={profesional.id} className="hover:bg-gray-50">
-                  {/* Nombre con Avatar */}
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                        <span className="text-blue-600 font-medium text-lg">
-                          {profesional.nombreCompleto.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">
-                          {profesional.nombreCompleto}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  
-                  {/* Documento */}
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {profesional.documentoIdentidad}
-                  </td>
-                  
-                  {/* Teléfono */}
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {profesional.telefono || '-'}
-                  </td>
-                  
-                  {/* Dirección */}
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {profesional.direccion || '-'}
-                  </td>
-                  
-                  {/* Tipo de horario */}
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                      profesional.usaHorarioNegocio
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {profesional.usaHorarioNegocio ? 'Negocio' : 'Personalizado'}
-                    </span>
-                  </td>
-                  
-                  {/* Acciones */}
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
-                      onClick={() => handleDelete(profesional.id, profesional.nombreCompleto)}
-                      className="text-red-600 hover:text-red-900 p-1"
-                      title="Eliminar"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* ========== DATA TABLE ========== */}
+      {!error && (profesionales.length > 0 || loading) && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+          <DataTable
+            columns={columns}
+            data={profesionales}
+            isLoading={loading}
+            searchPlaceholder="Buscar profesional..."
+            showExport={true}
+            onExportExcel={handleExportExcel}
+            onExportPDF={handleExportPDF}
+          />
         </div>
       )}
 
-      {/* ========== MODAL: CREAR PROFESIONAL ========== */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
-            {/* Header del Modal */}
-            <div className="flex items-center justify-between px-6 py-4 border-b">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Nuevo Profesional
-              </h3>
-              <button
-                onClick={() => setShowModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X size={24} />
-              </button>
-            </div>
-
-            {/* Formulario */}
-            <form onSubmit={handleCreate} className="p-6 space-y-4">
-              {/* Error del formulario */}
-              {formError && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded">
-                  {formError}
-                </div>
-              )}
-
-              {/* Campo: Nombre Completo */}
-              <div>
-                <label htmlFor="nombreCompleto" className="block text-sm font-medium text-gray-700 mb-1">
-                  Nombre Completo *
-                </label>
-                <input
-                  type="text"
-                  id="nombreCompleto"
-                  name="nombreCompleto"
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                  placeholder="Carlos López"
-                />
-              </div>
-
-              {/* Campo: Documento */}
-              <div>
-                <label htmlFor="documentoIdentidad" className="block text-sm font-medium text-gray-700 mb-1">
-                  Documento de Identidad *
-                </label>
-                <input
-                  type="text"
-                  id="documentoIdentidad"
-                  name="documentoIdentidad"
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                  placeholder="12345678"
-                />
-              </div>
-
-              {/* Campo: Teléfono */}
-              <div>
-                <label htmlFor="telefono" className="block text-sm font-medium text-gray-700 mb-1">
-                  Teléfono
-                </label>
-                <input
-                  type="text"
-                  id="telefono"
-                  name="telefono"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                  placeholder="987654321"
-                />
-              </div>
-
-              {/* Campo: Dirección */}
-              <div>
-                <label htmlFor="direccion" className="block text-sm font-medium text-gray-700 mb-1">
-                  Dirección
-                </label>
-                <input
-                  type="text"
-                  id="direccion"
-                  name="direccion"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                  placeholder="Av. Principal 123"
-                />
-              </div>
-
-              {/* Botones */}
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {creating ? 'Guardando...' : 'Guardar'}
-                </button>
-              </div>
-            </form>
+      {/* ========== MODAL: CREAR/EDITAR ========== */}
+      <Modal
+        isOpen={showFormModal}
+        onClose={() => setShowFormModal(false)}
+        title={selectedProfesional ? 'Editar Profesional' : 'Nuevo Profesional'}
+        size="md"
+      >
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {/* Nombre Completo */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Nombre Completo *
+            </label>
+            <input
+              {...register('nombreCompleto')}
+              type="text"
+              className={`w-full px-3 py-2 border rounded-lg outline-none transition-colors
+                bg-white dark:bg-gray-700 text-gray-900 dark:text-white
+                ${errors.nombreCompleto 
+                  ? 'border-red-300 dark:border-red-600 focus:ring-red-500' 
+                  : 'border-gray-300 dark:border-gray-600 focus:ring-blue-500'
+                } focus:ring-2 focus:border-transparent`}
+              placeholder="Carlos López"
+            />
+            {errors.nombreCompleto && (
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.nombreCompleto.message}</p>
+            )}
           </div>
-        </div>
-      )}
+
+          {/* Documento */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Documento de Identidad *
+            </label>
+            <input
+              {...register('documentoIdentidad')}
+              type="text"
+              className={`w-full px-3 py-2 border rounded-lg outline-none transition-colors
+                bg-white dark:bg-gray-700 text-gray-900 dark:text-white
+                ${errors.documentoIdentidad 
+                  ? 'border-red-300 dark:border-red-600 focus:ring-red-500' 
+                  : 'border-gray-300 dark:border-gray-600 focus:ring-blue-500'
+                } focus:ring-2 focus:border-transparent`}
+              placeholder="12345678"
+            />
+            {errors.documentoIdentidad && (
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.documentoIdentidad.message}</p>
+            )}
+          </div>
+
+          {/* Teléfono */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Teléfono
+            </label>
+            <input
+              {...register('telefono')}
+              type="text"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
+                bg-white dark:bg-gray-700 text-gray-900 dark:text-white
+                focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-colors"
+              placeholder="987654321"
+            />
+          </div>
+
+          {/* Dirección */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Dirección
+            </label>
+            <input
+              {...register('direccion')}
+              type="text"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
+                bg-white dark:bg-gray-700 text-gray-900 dark:text-white
+                focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-colors"
+              placeholder="Av. Principal 123"
+            />
+          </div>
+
+          {/* Usa Horario del Negocio */}
+          <div className="flex items-center gap-2">
+            <input
+              {...register('usaHorarioNegocio')}
+              type="checkbox"
+              id="usaHorarioNegocio"
+              className="w-4 h-4 text-blue-600 border-gray-300 dark:border-gray-600 rounded 
+                focus:ring-blue-500 bg-white dark:bg-gray-700"
+            />
+            <label htmlFor="usaHorarioNegocio" className="text-sm text-gray-700 dark:text-gray-300">
+              Usa horario del negocio
+            </label>
+          </div>
+
+          {/* Botones */}
+          <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <button
+              type="button"
+              onClick={() => setShowFormModal(false)}
+              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
+                text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 
+                disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 size={18} className="animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                selectedProfesional ? 'Actualizar' : 'Crear'
+              )}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ========== MODAL: CONFIRMAR ELIMINACIÓN ========== */}
+      <ConfirmModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleConfirmDelete}
+        title="Eliminar Profesional"
+        message={`¿Estás seguro de eliminar a "${selectedProfesional?.nombreCompleto}"? Esta acción no se puede deshacer.`}
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        variant="danger"
+        isLoading={isSubmitting}
+      />
     </div>
   );
 }

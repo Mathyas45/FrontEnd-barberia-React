@@ -2,17 +2,8 @@
  * ============================================================
  * COMPONENTES UI REUTILIZABLES
  * ============================================================
- * Aquí irán los componentes de shadcn/ui cuando los instales.
- * 
- * Para instalar shadcn/ui en Next.js:
- * npx shadcn@latest init
- * 
- * Luego puedes agregar componentes:
- * npx shadcn@latest add button
- * npx shadcn@latest add input
- * npx shadcn@latest add card
- * etc.
+ * Componentes de interfaz genéricos para toda la app.
  */
 
-// Placeholder - exporta componentes cuando los tengas
-export {};
+export { Modal, ConfirmModal } from './modal';
+export { DataTable } from './data-table';

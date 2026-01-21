@@ -3,18 +3,18 @@
  * LAYOUT - DASHBOARD
  * ============================================================
  * Layout principal para todas las páginas del sistema admin.
- * Usa el nuevo Sidebar de Flowbite con diseño responsivo.
  * 
  * ESTRUCTURA:
- * - Sidebar fijo a la izquierda (oculto en móvil)
- * - Contenido principal con padding ajustado
- * - El header se incluye en cada página si lo necesitas
- * 
- * En Next.js App Router, los layouts se aplican automáticamente
- * a todas las páginas dentro de su carpeta.
+ * ┌─────────────────────────────────────────────────────────┐
+ * │ Sidebar │           Header (sticky)                      │
+ * │         │────────────────────────────────────────────────│
+ * │         │                                                │
+ * │         │           Contenido Principal                  │
+ * │         │                                                │
+ * └─────────────────────────────────────────────────────────┘
  */
 
-import { FlowbiteSidebar } from '@/components/layout';
+import { FlowbiteSidebar, DashboardHeader, DashboardFooter } from '@/components/layout';
 
 export default function DashboardLayout({
   children,
@@ -22,16 +22,22 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Sidebar con Flowbite */}
       <FlowbiteSidebar />
 
       {/* Contenido principal - con margen izquierdo para el sidebar */}
-      <div className="p-4 sm:ml-64">
+      <div className="sm:ml-64 flex flex-col min-h-screen">
+        {/* Header global sticky */}
+        <DashboardHeader />
+
         {/* Área de contenido */}
-        <div className="p-4">
+        <main className="flex-1 p-4 md:p-6">
           {children}
-        </div>
+        </main>
+
+        {/* Footer compartido */}
+        <DashboardFooter />
       </div>
     </div>
   );

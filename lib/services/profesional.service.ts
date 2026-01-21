@@ -22,6 +22,7 @@ import type {
   UpdateProfesionalDto,
   HorarioProfesional,
   HorarioDto,
+  ApiResponse,
 } from '@/lib/types';
 
 // Endpoint base
@@ -34,34 +35,35 @@ export const profesionalService = {
   /**
    * Obtiene lista de todos los profesionales del negocio
    * El backend filtra automáticamente por negocioId del token
+   * Respuesta viene en formato: { code, success, message, data: [...] }
    */
   async getAll(): Promise<Profesional[]> {
-    const response = await httpClient.get<Profesional[]>(ENDPOINT);
-    return response.data;
+    const response = await httpClient.get<ApiResponse<Profesional[]>>(ENDPOINT);
+    return response.data.data || [];
   },
 
   /**
    * Obtiene un profesional por ID
    */
   async getById(id: number): Promise<Profesional> {
-    const response = await httpClient.get<Profesional>(`${ENDPOINT}/${id}`);
-    return response.data;
+    const response = await httpClient.get<ApiResponse<Profesional>>(`${ENDPOINT}/${id}`);
+    return response.data.data;
   },
 
   /**
    * Crea un nuevo profesional
    */
   async create(data: CreateProfesionalDto): Promise<Profesional> {
-    const response = await httpClient.post<Profesional>(ENDPOINT, data);
-    return response.data;
+    const response = await httpClient.post<ApiResponse<Profesional>>(ENDPOINT, data);
+    return response.data.data;
   },
 
   /**
    * Actualiza un profesional existente
    */
   async update(id: number, data: UpdateProfesionalDto): Promise<Profesional> {
-    const response = await httpClient.put<Profesional>(`${ENDPOINT}/${id}`, data);
-    return response.data;
+    const response = await httpClient.put<ApiResponse<Profesional>>(`${ENDPOINT}/${id}`, data);
+    return response.data.data;
   },
 
   /**
@@ -79,21 +81,21 @@ export const profesionalService = {
    * Obtiene los horarios de un profesional
    */
   async getHorarios(profesionalId: number): Promise<HorarioProfesional[]> {
-    const response = await httpClient.get<HorarioProfesional[]>(
+    const response = await httpClient.get<ApiResponse<HorarioProfesional[]>>(
       `${ENDPOINT}/${profesionalId}/horarios`
     );
-    return response.data;
+    return response.data.data || [];
   },
 
   /**
    * Agrega un horario a un profesional
    */
   async addHorario(profesionalId: number, data: HorarioDto): Promise<HorarioProfesional> {
-    const response = await httpClient.post<HorarioProfesional>(
+    const response = await httpClient.post<ApiResponse<HorarioProfesional>>(
       `${ENDPOINT}/${profesionalId}/horarios`,
       data
     );
-    return response.data;
+    return response.data.data;
   },
 
   // ============================================================
@@ -104,8 +106,8 @@ export const profesionalService = {
    * Obtiene los servicios que ofrece un profesional
    */
   async getServicios(profesionalId: number): Promise<unknown[]> {
-    const response = await httpClient.get(`${ENDPOINT}/${profesionalId}/servicios`);
-    return response.data;
+    const response = await httpClient.get<ApiResponse<unknown[]>>(`${ENDPOINT}/${profesionalId}/servicios`);
+    return response.data.data || [];
   },
 
   /**

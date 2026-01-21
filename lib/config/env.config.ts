@@ -6,13 +6,13 @@
  * NUNCA hardcodees URLs o configuraciones directamente en el código.
  * 
  * Para configurar: crea un archivo .env.local en la raíz con:
- * NEXT_PUBLIC_API_URL=http://localhost:8080
+ * NEXT_PUBLIC_API_URL=http://localhost:8080/api
  * NEXT_PUBLIC_APP_NAME=Barbería
  */
 
 export const envConfig = {
   // URL base del API backend
-  apiUrl: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080',
+  apiUrl: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api',
   
   // Nombre de la aplicación
   appName: process.env.NEXT_PUBLIC_APP_NAME || 'Barbería',

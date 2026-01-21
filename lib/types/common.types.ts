@@ -20,11 +20,13 @@ export interface ApiPaginatedResponse<T> {
 
 /**
  * Respuesta genérica del API
+ * Formato: { code: 200, success: true, message: "...", data: ... }
  */
 export interface ApiResponse<T> {
-  data: T;
-  message?: string;
+  code: number;
   success: boolean;
+  message: string;
+  data: T;
 }
 
 /**

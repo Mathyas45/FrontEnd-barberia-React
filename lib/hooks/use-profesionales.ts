@@ -19,7 +19,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { profesionalService } from '@/lib/services';
-import type { Profesional, CreateProfesionalDto, ApiError } from '@/lib/types';
+import type { Profesional, CreateProfesionalDto, UpdateProfesionalDto, ApiError } from '@/lib/types';
 
 /**
  * Estado interno del hook
@@ -36,6 +36,7 @@ interface UseProfesionalesState {
 interface UseProfesionalesReturn extends UseProfesionalesState {
   refetch: () => Promise<void>;
   createProfesional: (data: CreateProfesionalDto) => Promise<Profesional>;
+  updateProfesional: (id: number, data: UpdateProfesionalDto) => Promise<Profesional>;
   deleteProfesional: (id: number) => Promise<void>;
 }
 
@@ -104,6 +105,16 @@ export function useProfesionales(): UseProfesionalesReturn {
   }, [fetchProfesionales]);
 
   // ============================================================
+  // FUNCIÓN PARA ACTUALIZAR
+  // ============================================================
+  const updateProfesional = useCallback(async (id: number, data: UpdateProfesionalDto): Promise<Profesional> => {
+    const actualizado = await profesionalService.update(id, data);
+    // Después de actualizar, recargamos la lista
+    await fetchProfesionales();
+    return actualizado;
+  }, [fetchProfesionales]);
+
+  // ============================================================
   // FUNCIÓN PARA ELIMINAR
   // ============================================================
   const deleteProfesional = useCallback(async (id: number): Promise<void> => {
@@ -127,6 +138,7 @@ export function useProfesionales(): UseProfesionalesReturn {
     ...state,
     refetch: fetchProfesionales,
     createProfesional,
+    updateProfesional,
     deleteProfesional,
   };
 }

@@ -142,13 +142,13 @@ export function FlowbiteSidebar() {
         } sm:translate-x-0`}
         aria-label="Sidebar"
       >
-        <div className="h-full px-3 py-4 overflow-y-auto bg-white border-r border-gray-200">
+        <div className="h-full px-3 py-4 overflow-y-auto bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
           {/* ========== LOGO Y NOMBRE ========== */}
           <Link href="/dashboard" className="flex items-center ps-2.5 mb-5">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center mr-3">
               <Scissors className="w-5 h-5 text-white" />
             </div>
-            <span className="self-center text-xl font-semibold whitespace-nowrap text-gray-900">
+            <span className="self-center text-xl font-semibold whitespace-nowrap text-gray-900 dark:text-white">
               Barbería
             </span>
           </Link>
@@ -166,13 +166,13 @@ export function FlowbiteSidebar() {
                     onClick={handleLinkClick}
                     className={`flex items-center p-2 rounded-lg group transition-colors ${
                       active
-                        ? 'bg-blue-100 text-blue-700'
-                        : 'text-gray-700 hover:bg-gray-100'
+                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                     }`}
                   >
                     <Icon
                       className={`w-5 h-5 transition-colors ${
-                        active ? 'text-blue-700' : 'text-gray-500 group-hover:text-gray-700'
+                        active ? 'text-blue-700 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200'
                       }`}
                     />
                     <span className="ms-3">{item.label}</span>
@@ -183,27 +183,27 @@ export function FlowbiteSidebar() {
           </ul>
 
           {/* ========== SEPARADOR ========== */}
-          <div className="border-t border-gray-200 my-4" />
+          <div className="border-t border-gray-200 dark:border-gray-700 my-4" />
 
           {/* ========== SECCIÓN INFERIOR (Usuario) ========== */}
           <ul className="space-y-2 font-medium">
             <li>
-              <div className="flex items-center p-2 text-gray-700 rounded-lg">
-                <UserCircle className="w-5 h-5 text-gray-500" />
+              <div className="flex items-center p-2 text-gray-700 dark:text-gray-300 rounded-lg">
+                <UserCircle className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                 <span className="ms-3 text-sm">Admin</span>
               </div>
             </li>
             <li>
               <button
                 onClick={() => {
-                  // TODO: Implementar logout
-                  // 1. Eliminar token de localStorage y cookie
-                  // 2. Redirigir a /login
-                  console.log('Cerrar sesión');
+                  // Usar authService para logout
+                  import('@/lib/services').then(({ authService }) => {
+                    authService.logout();
+                  });
                 }}
-                className="flex items-center w-full p-2 text-gray-700 rounded-lg hover:bg-red-50 hover:text-red-700 group transition-colors"
+                className="flex items-center w-full p-2 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-700 dark:hover:text-red-400 group transition-colors"
               >
-                <LogOut className="w-5 h-5 text-gray-500 group-hover:text-red-700" />
+                <LogOut className="w-5 h-5 text-gray-500 dark:text-gray-400 group-hover:text-red-700 dark:group-hover:text-red-400" />
                 <span className="ms-3">Cerrar Sesión</span>
               </button>
             </li>
