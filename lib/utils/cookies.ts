@@ -1,17 +1,23 @@
 /**
  * ============================================================
- * UTILIDADES PARA COOKIES
+ * UTILIDADES PARA COOKIES - TOKEN DE AUTENTICACIÓN
  * ============================================================
  * 
- * Funciones helper para manejar cookies del lado del cliente.
- * Las usamos junto con el middleware para autenticación.
+ * El token JWT se guarda SOLO en cookie (única fuente de verdad).
  * 
- * ¿POR QUÉ COOKIES Y NO SOLO LOCALSTORAGE?
- * - localStorage: Solo accesible en el cliente (JavaScript)
- * - cookies: Accesibles en cliente Y servidor (middleware)
+ * ¿POR QUÉ COOKIE Y NO LOCALSTORAGE?
+ * - Cookie: Accesible en cliente (JavaScript) Y servidor (middleware)
+ * - localStorage: Solo accesible en el cliente
  * 
- * El middleware de Next.js se ejecuta en el servidor,
- * por eso necesitamos cookies para verificar autenticación.
+ * ¿QUIÉN LEE ESTA COOKIE?
+ * - middleware.ts: Verifica si el usuario puede acceder a /dashboard/*
+ * - http-client.ts: Lee el token para enviarlo en el header Authorization
+ * - auth.service.ts: Verifica si hay sesión activa
+ * 
+ * VENTAJAS:
+ * - Una única fuente de verdad para el token
+ * - No hay duplicación de datos
+ * - Más fácil de mantener y debuggear
  */
 
 // Nombre de la cookie de autenticación

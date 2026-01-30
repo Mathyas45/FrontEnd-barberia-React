@@ -1,4 +1,4 @@
-'use client';
+'use client';//esto se pone para que sea un componente del lado del cliente, es decir, que pueda usar hooks de react como useState o useEffect, cliente se refiere a navegador
 
 /**
  * ============================================================
@@ -7,45 +7,35 @@
  * 
  * Gestión completa de profesionales con:
  * - Tabla con TanStack Table
- * - Búsqueda y ordenamiento
- * - Modal para crear/editar (mismo componente)
+ * - Búsqueda en BACKEND (no solo filtro de tabla)
+ * - Modal para crear/editar usando componente reutilizable
  * - Modal de confirmación para eliminar
  * - Exportación a PDF y Excel
  * - Soporte completo para dark mode
+ * - RBAC: Botones visibles según permisos del usuario
+ * 
+ * CAMBIOS IMPORTANTES:
+ * - El formulario está en components/forms/profesional-form.tsx (REUTILIZABLE)
+ * - La búsqueda usa el backend: GET /profesionales?query=texto
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { createColumnHelper } from '@tanstack/react-table';
 import { useProfesionales } from '@/lib/hooks';
-import { DataTable } from '@/components/ui/data-table';
+import { useAuth } from '@/lib/context'; // Hook para verificar permisos
+import { showSuccess, showError, isValidationError } from '@/lib/utils';
+import { DataTable, SearchInput } from '@/components/ui';
 import { Modal, ConfirmModal } from '@/components/ui/modal';
+import { ProfesionalForm } from '@/components/forms';
 import { exportToPDF, exportToExcel } from '@/lib/utils';
-import type { Profesional, CreateProfesionalDto, UpdateProfesionalDto } from '@/lib/types';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import type { Profesional, CreateProfesionalDto, UpdateProfesionalDto, ApiError } from '@/lib/types';
 import { 
   Users, 
   Plus, 
   Pencil, 
   Trash2, 
-  RefreshCw,
-  Loader2
+  RefreshCw
 } from 'lucide-react';
-
-// ============================================================
-// SCHEMA DE VALIDACIÓN CON ZOD
-// ============================================================
-const profesionalSchema = z.object({
-  nombreCompleto: z.string().min(3, 'El nombre debe tener al menos 3 caracteres'),
-  documentoIdentidad: z.string().min(6, 'El documento debe tener al menos 6 caracteres'),
-  telefono: z.string().optional(),
-  direccion: z.string().optional(),
-  fechaNacimiento: z.string().optional(),
-  usaHorarioNegocio: z.boolean().optional().default(true),
-});
-
-type ProfesionalFormData = z.infer<typeof profesionalSchema>;
 
 // ============================================================
 // COLUMN HELPER PARA LA TABLA
@@ -56,39 +46,39 @@ const columnHelper = createColumnHelper<Profesional>();
 // COMPONENTE PRINCIPAL
 // ============================================================
 export default function ProfesionalesPage() {
-  // Hook de profesionales
+  // Hook de profesionales (incluye búsqueda en backend)
   const { 
     profesionales,
     loading,
     error,
+    searchQuery,
     refetch,
+    search,
+    clearSearch,
     createProfesional,
     updateProfesional,
     deleteProfesional 
   } = useProfesionales();
+
+  // ============================================================
+  // RBAC: Verificar permisos del usuario
+  // ============================================================
+  const { hasPermission } = useAuth();
+  
+  const canCreate = hasPermission('CREATE_PROFESSIONALS');
+  const canUpdate = hasPermission('UPDATE_PROFESSIONALS');
+  const canDelete = hasPermission('DELETE_PROFESSIONALS');
 
   // Estados para modales
   const [showFormModal, setShowFormModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedProfesional, setSelectedProfesional] = useState<Profesional | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Estado para errores del servidor (validación del backend)
+  const [serverError, setServerError] = useState<ApiError | null>(null);
 
-  // React Hook Form
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm({
-    resolver: zodResolver(profesionalSchema),
-    defaultValues: {
-      nombreCompleto: '',
-      documentoIdentidad: '',
-      telefono: '',
-      direccion: '',
-      usaHorarioNegocio: true,
-    },
-  });
+  // Estado para búsqueda (input controlado)
+  const [searchInput, setSearchInput] = useState('');
 
   // ============================================================
   // DEFINICIÓN DE COLUMNAS
@@ -131,57 +121,71 @@ export default function ProfesionalesPage() {
         </span>
       ),
     }),
-    columnHelper.display({
-      id: 'actions',
-      header: 'Acciones',
-      cell: (info) => (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => handleEdit(info.row.original)}
-            className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-            title="Editar"
-          >
-            <Pencil size={16} />
-          </button>
-          <button
-            onClick={() => handleDeleteClick(info.row.original)}
-            className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-            title="Eliminar"
-          >
-            <Trash2 size={16} />
-          </button>
-        </div>
-      ),
-    }),
-  ], []);
+    // Solo mostrar columna de acciones si tiene algún permiso de acción
+    ...(canUpdate || canDelete ? [
+      columnHelper.display({
+        id: 'actions',
+        header: 'Acciones',
+        cell: (info) => (
+          <div className="flex items-center gap-2">
+            {/* Botón Editar - Solo si tiene permiso UPDATE_PROFESSIONALS */}
+            {canUpdate && (
+              <button
+                onClick={() => handleEdit(info.row.original)}
+                className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                title="Editar"
+              >
+                <Pencil size={16} />
+              </button>
+            )}
+            {/* Botón Eliminar - Solo si tiene permiso DELETE_PROFESSIONALS */}
+            {canDelete && (
+              <button
+                onClick={() => handleDeleteClick(info.row.original)}
+                className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                title="Eliminar"
+              >
+                <Trash2 size={16} />
+              </button>
+            )}
+          </div>
+        ),
+      }),
+    ] : []),
+  ], [canUpdate, canDelete]);
 
   // ============================================================
-  // HANDLERS
+  // HANDLERS DE BÚSQUEDA (usa SearchInput reutilizable)
+  // ============================================================
+  
+  // Buscar (el componente envía el query, si está vacío lista todos)
+  const handleSearch = useCallback((query: string) => {
+    if (query) {
+      search(query);
+    } else {
+      clearSearch();
+    }
+  }, [search, clearSearch]);
+
+  // Limpiar búsqueda
+  const handleClearSearch = useCallback(() => {
+    setSearchInput('');
+    clearSearch();
+  }, [clearSearch]);
+
+  // ============================================================
+  // HANDLERS DE MODALES
   // ============================================================
   
   // Abrir modal para crear
   const handleCreate = () => {
     setSelectedProfesional(null);
-    reset({
-      nombreCompleto: '',
-      documentoIdentidad: '',
-      telefono: '',
-      direccion: '',
-      usaHorarioNegocio: true,
-    });
     setShowFormModal(true);
   };
 
   // Abrir modal para editar
   const handleEdit = (profesional: Profesional) => {
     setSelectedProfesional(profesional);
-    reset({
-      nombreCompleto: profesional.nombreCompleto,
-      documentoIdentidad: profesional.documentoIdentidad,
-      telefono: profesional.telefono || '',
-      direccion: profesional.direccion || '',
-      usaHorarioNegocio: profesional.usaHorarioNegocio,
-    });
     setShowFormModal(true);
   };
 
@@ -191,21 +195,42 @@ export default function ProfesionalesPage() {
     setShowDeleteModal(true);
   };
 
-  // Enviar formulario (crear o editar)
-  const onSubmit = async (data: ProfesionalFormData) => {
+  // Cerrar modal de formulario
+  const handleCloseFormModal = () => {
+    setShowFormModal(false);
+    setSelectedProfesional(null);
+    setServerError(null); // Limpiar errores al cerrar
+  };
+
+  // ============================================================
+  // HANDLERS DE CRUD
+  // ============================================================
+  
+  // Enviar formulario (crear o editar) - Recibe datos del ProfesionalForm
+  const handleFormSubmit = async (data: CreateProfesionalDto | UpdateProfesionalDto) => {
     setIsSubmitting(true);
+    setServerError(null); // Limpiar errores previos
+    
     try {
       if (selectedProfesional) {
-        // Editar
         await updateProfesional(selectedProfesional.id, data as UpdateProfesionalDto);
+        showSuccess('Profesional actualizado correctamente');
       } else {
-        // Crear
         await createProfesional(data as CreateProfesionalDto);
+        showSuccess('Profesional creado correctamente');
       }
-      setShowFormModal(false);
-      reset();
+      // Solo cerrar si fue exitoso
+      handleCloseFormModal();
     } catch (err) {
-      console.error('Error:', err);
+      const apiError = err as ApiError;
+      
+      // Si es error de validación, mostrar en el formulario (no cerrar modal)
+      if (isValidationError(apiError)) {
+        setServerError(apiError);
+      } else {
+        // Para otros errores, mostrar toast
+        showError(apiError.message || 'Error al guardar el profesional');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -215,41 +240,41 @@ export default function ProfesionalesPage() {
   const handleConfirmDelete = async () => {
     if (!selectedProfesional) return;
     setIsSubmitting(true);
+    
     try {
       await deleteProfesional(selectedProfesional.id);
+      showSuccess('Profesional eliminado correctamente');
       setShowDeleteModal(false);
       setSelectedProfesional(null);
     } catch (err) {
-      console.error('Error:', err);
+      const apiError = err as ApiError;
+      showError(apiError.message || 'Error al eliminar el profesional');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Exportar a Excel
+  // ============================================================
+  // HANDLERS DE EXPORTACIÓN
+  // ============================================================
+  
+  const exportColumns = [
+    { header: 'Nombre', accessorKey: 'nombreCompleto' },
+    { header: 'Documento', accessorKey: 'documentoIdentidad' },
+    { header: 'Teléfono', accessorKey: 'telefono' },
+    { header: 'Dirección', accessorKey: 'direccion' },
+  ];
+
   const handleExportExcel = () => {
-    const exportColumns = [
-      { header: 'Nombre', accessorKey: 'nombreCompleto' },
-      { header: 'Documento', accessorKey: 'documentoIdentidad' },
-      { header: 'Teléfono', accessorKey: 'telefono' },
-      { header: 'Dirección', accessorKey: 'direccion' },
-    ];
     exportToExcel(profesionales, exportColumns, 'profesionales');
   };
 
-  // Exportar a PDF
   const handleExportPDF = () => {
-    const exportColumns = [
-      { header: 'Nombre', accessorKey: 'nombreCompleto' },
-      { header: 'Documento', accessorKey: 'documentoIdentidad' },
-      { header: 'Teléfono', accessorKey: 'telefono' },
-      { header: 'Dirección', accessorKey: 'direccion' },
-    ];
     exportToPDF(profesionales, exportColumns, 'profesionales', 'Lista de Profesionales');
   };
 
   // ============================================================
-  // RENDER
+  // RENDER, es decir la parte JSX que se muestra en pantalla
   // ============================================================
   return (
     <div className="space-y-6">
@@ -277,16 +302,32 @@ export default function ProfesionalesPage() {
             <RefreshCw size={20} className={`text-gray-600 dark:text-gray-400 ${loading ? 'animate-spin' : ''}`} />
           </button>
 
-          {/* Botón Crear */}
-          <button
-            onClick={handleCreate}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg 
-              hover:bg-blue-700 transition-colors font-medium"
-          >
-            <Plus size={20} />
-            <span className="hidden sm:inline">Nuevo Profesional</span>
-          </button>
+          {/* Botón Crear - Solo si tiene permiso CREATE_PROFESSIONALS */}
+          {canCreate && (
+            <button
+              onClick={handleCreate}
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg 
+                hover:bg-blue-700 transition-colors font-medium"
+            >
+              <Plus size={20} />
+              <span className="hidden sm:inline">Nuevo Profesional</span>
+            </button>
+          )}
         </div>
+      </div>
+
+      {/* ========== BARRA DE BÚSQUEDA (componente reutilizable) ========== */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+        <SearchInput
+          value={searchInput}
+          onChange={setSearchInput}
+          onSearch={handleSearch}
+          onClear={handleClearSearch}
+          placeholder="Buscar por nombre o documento..."
+          isLoading={loading}
+          searchQuery={searchQuery}
+          resultCount={profesionales.length}
+        />
       </div>
 
       {/* ========== ERROR STATE ========== */}
@@ -308,17 +349,29 @@ export default function ProfesionalesPage() {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center">
           <Users size={48} className="mx-auto text-gray-400 dark:text-gray-500" />
           <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-white">
-            No hay profesionales
+            {searchQuery ? 'No se encontraron resultados' : 'No hay profesionales'}
           </h3>
           <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Empieza agregando tu primer profesional
+            {searchQuery 
+              ? `No hay profesionales que coincidan con "${searchQuery}"`
+              : 'Empieza agregando tu primer profesional'
+            }
           </p>
-          <button
-            onClick={handleCreate}
-            className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Agregar Profesional
-          </button>
+          {searchQuery ? (
+            <button
+              onClick={handleClearSearch}
+              className="mt-4 text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              Limpiar búsqueda
+            </button>
+          ) : canCreate && (
+            <button
+              onClick={handleCreate}
+              className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Agregar Profesional
+            </button>
+          )}
         </div>
       )}
 
@@ -329,135 +382,29 @@ export default function ProfesionalesPage() {
             columns={columns}
             data={profesionales}
             isLoading={loading}
-            searchPlaceholder="Buscar profesional..."
-            showExport={true}
+            showSearch={false}
+            showExport={true} 
             onExportExcel={handleExportExcel}
             onExportPDF={handleExportPDF}
           />
         </div>
       )}
 
-      {/* ========== MODAL: CREAR/EDITAR ========== */}
+      {/* ========== MODAL: CREAR/EDITAR (usa componente reutilizable) ========== */}
       <Modal
         isOpen={showFormModal}
-        onClose={() => setShowFormModal(false)}
+        onClose={handleCloseFormModal}
         title={selectedProfesional ? 'Editar Profesional' : 'Nuevo Profesional'}
         size="md"
       >
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          {/* Nombre Completo */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Nombre Completo *
-            </label>
-            <input
-              {...register('nombreCompleto')}
-              type="text"
-              className={`w-full px-3 py-2 border rounded-lg outline-none transition-colors
-                bg-white dark:bg-gray-700 text-gray-900 dark:text-white
-                ${errors.nombreCompleto 
-                  ? 'border-red-300 dark:border-red-600 focus:ring-red-500' 
-                  : 'border-gray-300 dark:border-gray-600 focus:ring-blue-500'
-                } focus:ring-2 focus:border-transparent`}
-              placeholder="Carlos López"
-            />
-            {errors.nombreCompleto && (
-              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.nombreCompleto.message}</p>
-            )}
-          </div>
-
-          {/* Documento */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Documento de Identidad *
-            </label>
-            <input
-              {...register('documentoIdentidad')}
-              type="text"
-              className={`w-full px-3 py-2 border rounded-lg outline-none transition-colors
-                bg-white dark:bg-gray-700 text-gray-900 dark:text-white
-                ${errors.documentoIdentidad 
-                  ? 'border-red-300 dark:border-red-600 focus:ring-red-500' 
-                  : 'border-gray-300 dark:border-gray-600 focus:ring-blue-500'
-                } focus:ring-2 focus:border-transparent`}
-              placeholder="12345678"
-            />
-            {errors.documentoIdentidad && (
-              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.documentoIdentidad.message}</p>
-            )}
-          </div>
-
-          {/* Teléfono */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Teléfono
-            </label>
-            <input
-              {...register('telefono')}
-              type="text"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
-                bg-white dark:bg-gray-700 text-gray-900 dark:text-white
-                focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-colors"
-              placeholder="987654321"
-            />
-          </div>
-
-          {/* Dirección */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Dirección
-            </label>
-            <input
-              {...register('direccion')}
-              type="text"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
-                bg-white dark:bg-gray-700 text-gray-900 dark:text-white
-                focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-colors"
-              placeholder="Av. Principal 123"
-            />
-          </div>
-
-          {/* Usa Horario del Negocio */}
-          <div className="flex items-center gap-2">
-            <input
-              {...register('usaHorarioNegocio')}
-              type="checkbox"
-              id="usaHorarioNegocio"
-              className="w-4 h-4 text-blue-600 border-gray-300 dark:border-gray-600 rounded 
-                focus:ring-blue-500 bg-white dark:bg-gray-700"
-            />
-            <label htmlFor="usaHorarioNegocio" className="text-sm text-gray-700 dark:text-gray-300">
-              Usa horario del negocio
-            </label>
-          </div>
-
-          {/* Botones */}
-          <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <button
-              type="button"
-              onClick={() => setShowFormModal(false)}
-              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
-                text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 
-                disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 size={18} className="animate-spin" />
-                  Guardando...
-                </>
-              ) : (
-                selectedProfesional ? 'Actualizar' : 'Crear'
-              )}
-            </button>
-          </div>
-        </form>
+        <ProfesionalForm
+          initialData={selectedProfesional}
+          onSubmit={handleFormSubmit}
+          onCancel={handleCloseFormModal}
+          isLoading={isSubmitting}
+          serverError={serverError}
+          onClearError={() => setServerError(null)}
+        />
       </Modal>
 
       {/* ========== MODAL: CONFIRMAR ELIMINACIÓN ========== */}

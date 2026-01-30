@@ -12,6 +12,10 @@
  */
 
 export { useProfesionales } from './use-profesionales';
+export { useCategorias } from './use-categorias';
 export { useServicios } from './use-servicios';
 export { useThemeToggle } from './use-theme-toggle';
+export { useClientes } from './use-clientes';
+export { usePermissions } from './use-permissions';
+
 

@@ -36,9 +36,12 @@ export const profesionalService = {
    * Obtiene lista de todos los profesionales del negocio
    * El backend filtra automáticamente por negocioId del token
    * Respuesta viene en formato: { code, success, message, data: [...] }
+   * 
+   * @param query - Filtro opcional por nombre o documento (búsqueda en backend)
    */
-  async getAll(): Promise<Profesional[]> {
-    const response = await httpClient.get<ApiResponse<Profesional[]>>(ENDPOINT);
+  async getAll(query?: string): Promise<Profesional[]> {
+    const params = query ? { query } : {};
+    const response = await httpClient.get<ApiResponse<Profesional[]>>(ENDPOINT, { params });
     return response.data.data || [];
   },
 
@@ -54,7 +57,7 @@ export const profesionalService = {
    * Crea un nuevo profesional
    */
   async create(data: CreateProfesionalDto): Promise<Profesional> {
-    const response = await httpClient.post<ApiResponse<Profesional>>(ENDPOINT, data);
+    const response = await httpClient.post<ApiResponse<Profesional>>(`${ENDPOINT}/register`, data);
     return response.data.data;
   },
 
@@ -62,7 +65,7 @@ export const profesionalService = {
    * Actualiza un profesional existente
    */
   async update(id: number, data: UpdateProfesionalDto): Promise<Profesional> {
-    const response = await httpClient.put<ApiResponse<Profesional>>(`${ENDPOINT}/${id}`, data);
+    const response = await httpClient.put<ApiResponse<Profesional>>(`${ENDPOINT}/update/${id}`, data);
     return response.data.data;
   },
 
@@ -70,7 +73,7 @@ export const profesionalService = {
    * Elimina (soft delete) un profesional
    */
   async delete(id: number): Promise<void> {
-    await httpClient.delete(`${ENDPOINT}/${id}`);
+    await httpClient.put(`${ENDPOINT}/eliminar/${id}`);
   },
 
   // ============================================================

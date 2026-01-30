@@ -37,7 +37,8 @@ function createHttpClient(): AxiosInstance {
     (config: InternalAxiosRequestConfig) => {
       // Solo en cliente (browser)
       if (typeof window !== 'undefined') {
-        const token = localStorage.getItem(envConfig.auth.tokenKey);
+        // Leemos el token de la COOKIE (única fuente de verdad)
+        const token = getTokenFromCookie();
         if (token && config.headers) {
           config.headers.Authorization = `Bearer ${token}`;
         }
@@ -46,6 +47,20 @@ function createHttpClient(): AxiosInstance {
     },
     (error) => Promise.reject(error)
   );
+
+  /**
+   * Lee el token de la cookie auth_token
+   */
+  function getTokenFromCookie(): string | null {
+    const cookies = document.cookie.split(';');
+    for (const cookie of cookies) {
+      const [name, value] = cookie.trim().split('=');
+      if (name === 'auth_token') {
+        return value;
+      }
+    }
+    return null;
+  }
 
   // ============================================================
   // INTERCEPTOR DE RESPONSE
@@ -65,23 +80,28 @@ function createHttpClient(): AxiosInstance {
 
       const { status, data } = error.response;
 
-      // Token expirado o inválido
-      if (status === 401) {
+      // Token expirado o inválido (401 o 403)
+      if (status === 401 || status === 403) {
         // Solo en cliente
         if (typeof window !== 'undefined') {
-          localStorage.removeItem(envConfig.auth.tokenKey);
+          // Limpiar cookie de autenticación
+          document.cookie = 'auth_token=; path=/; max-age=0';
+          // Limpiar datos de usuario (esto sí puede estar en localStorage)
           localStorage.removeItem(envConfig.auth.userKey);
-          // Redirigir a login (esto lo manejarás con tu context de auth)
+          // Redirigir a login
           window.location.href = '/login';
         }
       }
 
-      // Construir error consistente
+      // Construir error consistente (preservando formato del backend)
+      // El backend envía: { error, errors, status, timestamp }
       const apiError: ApiError = {
-        message: data?.message || getDefaultErrorMessage(status),
+        message: data?.message || data?.error || getDefaultErrorMessage(status),
+        error: data?.error,           // Preservar el tipo de error del backend
         status,
         code: data?.code,
-        errors: data?.errors,
+        timestamp: data?.timestamp,   // Preservar timestamp del backend
+        errors: data?.errors,         // Preservar errores de validación por campo
       };
 
       return Promise.reject(apiError);

@@ -151,42 +151,54 @@ export function DataTable<TData>({
 
       {/* ========== TABLA ========== */}
       <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-        <table className="w-full text-sm text-left">
+        <table className="w-full text-sm text-left table-fixed">
           {/* Header */}
           <thead className="text-xs uppercase bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <th
-                    key={header.id}
-                    className="px-4 py-3 font-semibold"
-                  >
-                    {header.isPlaceholder ? null : (
-                      <div
-                        className={`flex items-center gap-2 ${
-                          header.column.getCanSort() ? 'cursor-pointer select-none hover:text-blue-600 dark:hover:text-blue-400' : ''
-                        }`}
-                        onClick={header.column.getToggleSortingHandler()}
-                      >
-                        {flexRender(header.column.columnDef.header, header.getContext())}
-                        
-                        {/* Indicador de ordenamiento */}
-                        {header.column.getCanSort() && (
-                          <span className="text-gray-400">
-                            {{
-                              asc: <ChevronUp size={14} />,
-                              desc: <ChevronDown size={14} />,
-                            }[header.column.getIsSorted() as string] ?? (
-                              <div className="opacity-0 group-hover:opacity-50">
-                                <ChevronUp size={14} />
-                              </div>
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </th>
-                ))}
+                {headerGroup.headers.map((header) => {
+                  // Obtener el ancho de la columna si está definido
+                  const columnSize = header.column.columnDef.size;
+                  const minWidth = header.column.columnDef.minSize;
+                  const maxWidth = header.column.columnDef.maxSize;
+                  
+                  return (
+                    <th
+                      key={header.id}
+                      className="px-4 py-3 font-semibold"
+                      style={{
+                        width: columnSize ? `${columnSize}px` : undefined,
+                        minWidth: minWidth ? `${minWidth}px` : undefined,
+                        maxWidth: maxWidth ? `${maxWidth}px` : undefined,
+                      }}
+                    >
+                      {header.isPlaceholder ? null : (
+                        <div
+                          className={`flex items-center gap-2 ${
+                            header.column.getCanSort() ? 'cursor-pointer select-none hover:text-blue-600 dark:hover:text-blue-400' : ''
+                          }`}
+                          onClick={header.column.getToggleSortingHandler()}
+                        >
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          
+                          {/* Indicador de ordenamiento */}
+                          {header.column.getCanSort() && (
+                            <span className="text-gray-400">
+                              {{
+                                asc: <ChevronUp size={14} />,
+                                desc: <ChevronDown size={14} />,
+                              }[header.column.getIsSorted() as string] ?? (
+                                <div className="opacity-0 group-hover:opacity-50">
+                                  <ChevronUp size={14} />
+                                </div>
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </th>
+                  );
+                })}
               </tr>
             ))}
           </thead>
@@ -217,14 +229,26 @@ export function DataTable<TData>({
                   key={row.id}
                   className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                 >
-                  {row.getVisibleCells().map((cell) => (
-                    <td
-                      key={cell.id}
-                      className="px-4 py-3 text-gray-900 dark:text-gray-100"
-                    >
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
-                  ))}
+                  {row.getVisibleCells().map((cell) => {
+                    // Obtener el ancho de la columna si está definido
+                    const columnSize = cell.column.columnDef.size;
+                    const minWidth = cell.column.columnDef.minSize;
+                    const maxWidth = cell.column.columnDef.maxSize;
+                    
+                    return (
+                      <td
+                        key={cell.id}
+                        className="px-4 py-3 text-gray-900 dark:text-gray-100"
+                        style={{
+                          width: columnSize ? `${columnSize}px` : undefined,
+                          minWidth: minWidth ? `${minWidth}px` : undefined,
+                          maxWidth: maxWidth ? `${maxWidth}px` : undefined,
+                        }}
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))
             )}

@@ -2,24 +2,29 @@
 
 /**
  * ============================================================
- * SIDEBAR CON FLOWBITE
+ * SIDEBAR CON FLOWBITE Y CONTROL DE PERMISOS (RBAC)
  * ============================================================
  * 
  * Menú lateral del dashboard basado en Flowbite.
  * Es responsivo: se oculta en móvil y se muestra con un botón.
  * 
+ * SISTEMA DE PERMISOS:
+ * - Cada item puede tener permisos requeridos
+ * - ADMIN/SUPER_ADMIN ven todo
+ * - Otros roles solo ven items para los que tienen permisos
+ * 
  * CÓMO AGREGAR NUEVOS ITEMS:
  * 1. Busca el array menuItems abajo
- * 2. Agrega un objeto con: label, href, icon
- * 3. El icono lo tomas de Heroicons o Lucide
+ * 2. Agrega un objeto con: label, href, icon, permissions (opcional)
+ * 3. Si no especificas permissions, el item es visible para todos
  * 
  * ESTRUCTURA:
  * - Logo del negocio arriba
- * - Items de navegación
+ * - Items de navegación filtrados por permisos
  * - Usuario y cerrar sesión abajo
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
@@ -30,37 +35,70 @@ import {
   Settings,
   LogOut,
   ChevronDown,
-  UserCircle
+  UserCircle,
+  Tag
 } from 'lucide-react';
+import { useAuth } from '@/lib/context';
+import type { Permission } from '@/lib/types';
+
+// ============================================================
+// TIPOS PARA ITEMS DEL MENÚ
+// ============================================================
+interface MenuItem {
+  label: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  /** Permisos requeridos para ver este item. Si está vacío, visible para todos */
+  permissions?: Permission[];
+  /** Si true, necesita TODOS los permisos. Si false, cualquiera (default: false) */
+  requireAll?: boolean;
+}
 
 // ============================================================
 // ITEMS DEL MENÚ - EDITA AQUÍ PARA AGREGAR SECCIONES
 // ============================================================
-const menuItems = [
+const menuItems: MenuItem[] = [
   {
     label: 'Dashboard',
     href: '/dashboard',
     icon: LayoutDashboard,
+    // Dashboard visible para todos los autenticados
   },
   {
     label: 'Profesionales',
     href: '/dashboard/profesionales',
     icon: Users,
+    permissions: ['READ_PROFESSIONALS'],
+  },
+  {
+    label: 'Categorías',
+    href: '/dashboard/categorias',
+    icon: Tag,
+    permissions: ['READ_CATEGORIES'],
+  },
+  {
+    label: 'Clientes',
+    href: '/dashboard/clientes',
+    icon: UserCircle,
+    permissions: ['READ_CLIENTS'],
   },
   {
     label: 'Servicios',
     href: '/dashboard/servicios',
     icon: Scissors,
+    permissions: ['READ_SERVICES'],
   },
   {
     label: 'Reservas',
     href: '/dashboard/reservas',
     icon: Calendar,
+    permissions: ['READ_BOOKING'],
   },
   {
     label: 'Configuración',
     href: '/dashboard/configuracion',
     icon: Settings,
+    permissions: ['MANAGE_SETTINGS'],
   },
 ];
 
@@ -71,6 +109,32 @@ export function FlowbiteSidebar() {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  
+  // Obtener funciones de permisos del contexto de auth
+  const { user, isAdmin, hasAnyPermission, hasAllPermissions } = useAuth();
+
+  // ============================================================
+  // FILTRAR ITEMS SEGÚN PERMISOS
+  // ============================================================
+  const visibleMenuItems = useMemo(() => {
+    // Si es admin, mostrar todo
+    if (isAdmin) {
+      return menuItems;
+    }
+
+    // Filtrar items según permisos del usuario
+    return menuItems.filter(item => {
+      // Si no tiene permisos definidos, es visible para todos
+      if (!item.permissions || item.permissions.length === 0) {
+        return true;
+      }
+
+      // Verificar permisos
+      return item.requireAll 
+        ? hasAllPermissions(item.permissions)
+        : hasAnyPermission(item.permissions);
+    });
+  }, [isAdmin, hasAnyPermission, hasAllPermissions]);
 
   // Necesario para evitar hydration mismatch con flowbite
   useEffect(() => {
@@ -155,7 +219,7 @@ export function FlowbiteSidebar() {
 
           {/* ========== ITEMS DE NAVEGACIÓN ========== */}
           <ul className="space-y-2 font-medium">
-            {menuItems.map((item) => {
+            {visibleMenuItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);
               
@@ -190,7 +254,16 @@ export function FlowbiteSidebar() {
             <li>
               <div className="flex items-center p-2 text-gray-700 dark:text-gray-300 rounded-lg">
                 <UserCircle className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-                <span className="ms-3 text-sm">Admin</span>
+                <div className="ms-3">
+                  <span className="text-sm font-medium block">
+                    {user?.nombreCompleto || user?.email || 'Usuario'}
+                  </span>
+                  {isAdmin && (
+                    <span className="text-xs text-blue-600 dark:text-blue-400">
+                      Administrador
+                    </span>
+                  )}
+                </div>
               </div>
             </li>
             <li>

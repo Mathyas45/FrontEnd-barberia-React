@@ -28,6 +28,7 @@ interface UseProfesionalesState {
   profesionales: Profesional[];
   loading: boolean;
   error: ApiError | null;
+  searchQuery: string; // Nuevo: para búsqueda en backend
 }
 
 /**
@@ -35,6 +36,8 @@ interface UseProfesionalesState {
  */
 interface UseProfesionalesReturn extends UseProfesionalesState {
   refetch: () => Promise<void>;
+  search: (query: string) => Promise<void>; // Nuevo: búsqueda en backend
+  clearSearch: () => Promise<void>; // Nuevo: limpiar búsqueda
   createProfesional: (data: CreateProfesionalDto) => Promise<Profesional>;
   updateProfesional: (id: number, data: UpdateProfesionalDto) => Promise<Profesional>;
   deleteProfesional: (id: number) => Promise<void>;
@@ -68,22 +71,28 @@ export function useProfesionales(): UseProfesionalesReturn {
     profesionales: [],
     loading: true,
     error: null,
+    searchQuery: '', // Nuevo: query de búsqueda actual
   });
 
   // ============================================================
-  // FUNCIÓN PARA CARGAR DATOS
+  // FUNCIÓN PARA CARGAR DATOS (con búsqueda opcional)
   // ============================================================
   // useCallback: memoriza la función para que no se re-cree en cada render
-  const fetchProfesionales = useCallback(async () => {
+  const fetchProfesionales = useCallback(async (query?: string) => {
     // Indicamos que está cargando
     setState((prev) => ({ ...prev, loading: true, error: null }));
     
     try {
-      // Llamamos al servicio (que llama al API)
-      const data = await profesionalService.getAll();
+      // Llamamos al servicio con el query opcional (búsqueda en backend)
+      const data = await profesionalService.getAll(query);
       
-      // Éxito: guardamos los datos
-      setState({ profesionales: data, loading: false, error: null });
+      // Éxito: guardamos los datos y el query usado
+      setState({ 
+        profesionales: data, 
+        loading: false, 
+        error: null,
+        searchQuery: query || '',
+      });
     } catch (err) {
       // Error: guardamos el error
       setState((prev) => ({
@@ -95,6 +104,20 @@ export function useProfesionales(): UseProfesionalesReturn {
   }, []);
 
   // ============================================================
+  // FUNCIÓN PARA BUSCAR (usa el backend)
+  // ============================================================
+  const search = useCallback(async (query: string) => {
+    await fetchProfesionales(query);
+  }, [fetchProfesionales]);
+
+  // ============================================================
+  // FUNCIÓN PARA LIMPIAR BÚSQUEDA
+  // ============================================================
+  const clearSearch = useCallback(async () => {
+    await fetchProfesionales();
+  }, [fetchProfesionales]);
+
+  // ============================================================
   // FUNCIÓN PARA CREAR
   // ============================================================
   const createProfesional = useCallback(async (data: CreateProfesionalDto): Promise<Profesional> => {
@@ -103,7 +126,7 @@ export function useProfesionales(): UseProfesionalesReturn {
     await fetchProfesionales();
     return nuevo;
   }, [fetchProfesionales]);
-
+  
   // ============================================================
   // FUNCIÓN PARA ACTUALIZAR
   // ============================================================
@@ -136,7 +159,9 @@ export function useProfesionales(): UseProfesionalesReturn {
   // ============================================================
   return {
     ...state,
-    refetch: fetchProfesionales,
+    refetch: () => fetchProfesionales(state.searchQuery), // Mantiene el filtro actual
+    search,
+    clearSearch,
     createProfesional,
     updateProfesional,
     deleteProfesional,

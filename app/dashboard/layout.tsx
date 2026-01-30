@@ -14,6 +14,9 @@
  * └─────────────────────────────────────────────────────────┘
  */
 
+'use client';
+
+import { AuthProvider } from '@/lib/context';
 import { FlowbiteSidebar, DashboardHeader, DashboardFooter } from '@/components/layout';
 
 export default function DashboardLayout({
@@ -22,24 +25,26 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Sidebar con Flowbite */}
-      <FlowbiteSidebar />
+    <AuthProvider>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        {/* Sidebar con Flowbite */}
+        <FlowbiteSidebar />
 
-      {/* Contenido principal - con margen izquierdo para el sidebar */}
-      <div className="sm:ml-64 flex flex-col min-h-screen">
-        {/* Header global sticky */}
-        <DashboardHeader />
+        {/* Contenido principal - con margen izquierdo para el sidebar */}
+        <div className="sm:ml-64 flex flex-col min-h-screen">
+          {/* Header global sticky */}
+          <DashboardHeader />
 
-        {/* Área de contenido */}
-        <main className="flex-1 p-4 md:p-6">
-          {children}
-        </main>
+          {/* Área de contenido */}
+          <main className="flex-1 p-4 md:p-6">
+            {children}
+          </main>
 
-        {/* Footer compartido */}
-        <DashboardFooter />
+          {/* Footer compartido */}
+          <DashboardFooter />
+        </div>
       </div>
-    </div>
+    </AuthProvider>
   );
 }
 

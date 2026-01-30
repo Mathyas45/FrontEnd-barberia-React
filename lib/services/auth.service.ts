@@ -12,10 +12,17 @@
  * FLUJO DE LOGIN:
  * 1. Usuario envía email + password
  * 2. Backend valida y retorna { token, usuario }
- * 3. Guardamos token en localStorage (para http-client)
- * 4. Guardamos token en cookie (para middleware)
- * 5. Guardamos usuario en localStorage
- * 6. Redirigimos al dashboard
+ * 3. Guardamos token en COOKIE (única fuente de verdad)
+ *    - El middleware lo lee para proteger rutas
+ *    - El httpClient lo lee para enviarlo en peticiones
+ * 4. Guardamos usuario en localStorage (solo datos, no token)
+ * 5. Redirigimos al dashboard
+ * 
+ * ¿POR QUÉ SOLO COOKIE PARA EL TOKEN?
+ * - Una única fuente de verdad (no duplicamos datos)
+ * - El middleware (servidor) puede leerla
+ * - JavaScript del cliente también puede leerla
+ * - Más seguro: puedes agregar HttpOnly en producción
  * 
  * IMPORTANTE: Este servicio NO usa httpClient para login
  * porque el interceptor agregaría un token que no existe aún.
@@ -23,11 +30,10 @@
 
 import axios from 'axios';
 import { envConfig } from '@/lib/config';
-import { setAuthCookie, removeAuthCookie } from '@/lib/utils';
+import { setAuthCookie, removeAuthCookie, getAuthCookie } from '@/lib/utils';
 import type { LoginRequest, LoginResponse, Usuario } from '@/lib/types';
 
-// Keys para localStorage
-const TOKEN_KEY = 'barberia_token';
+// Key para datos de usuario en localStorage (el token está en cookie)
 const USER_KEY = 'barberia_user';
 
 /**
@@ -45,13 +51,15 @@ export const authService = {
    */
   async login(credentials: LoginRequest): Promise<LoginResponse> {
     try {
+        credentials.email = credentials.email.toLowerCase();
+        credentials.password = credentials.password.trim();
       // Usamos axios directamente sin interceptor
       const response = await axios.post(
         `${envConfig.apiUrl}/auth/login`,
         credentials,
         {
           headers: {
-            'Content-Type': 'application/json',
+            'Content-Type': 'application/json',//esto indica que el cuerpo de la solicitud está en formato JSON
           },
         }
       );
@@ -68,13 +76,12 @@ export const authService = {
 
       const { token, usuario } = loginData;
 
-      // Guardar token en localStorage (para httpClient)
-      localStorage.setItem(TOKEN_KEY, token);
-      
-      // Guardar token en cookie (para middleware de Next.js)
+      // Guardar token SOLO en cookie (única fuente de verdad)
+      // - El middleware lo lee para proteger rutas
+      // - El httpClient lo lee para enviarlo en cada petición
       setAuthCookie(token);
       
-      // Guardar datos del usuario
+      // Guardar datos del usuario en localStorage (solo datos, no el token)
       localStorage.setItem(USER_KEY, JSON.stringify(usuario));
 
       return loginData;
@@ -93,24 +100,23 @@ export const authService = {
    * Cierra la sesión y limpia los datos
    */
   logout(): void {
-    // Limpiar localStorage
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
-    
-    // Limpiar cookie
+    // Limpiar cookie del token (única fuente de verdad)
     removeAuthCookie();
+    
+    // Limpiar datos del usuario de localStorage
+    localStorage.removeItem(USER_KEY);
     
     // Redirigir a login
     window.location.href = '/login';
   },
 
   /**
-   * Obtiene el token guardado
+   * Obtiene el token guardado (de la cookie)
    * @returns Token o null si no existe
    */
   getToken(): string | null {
     if (typeof window === 'undefined') return null;
-    return localStorage.getItem(TOKEN_KEY);
+    return getAuthCookie();
   },
 
   /**

@@ -34,9 +34,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Eye, EyeOff, Loader2, Scissors, AlertCircle } from 'lucide-react';
 import { authService } from '@/lib/services';
+import { parseApiError } from '@/lib/utils';
+import type { ApiError } from '@/lib/types';
 
 // ============================================================
-// ESQUEMA DE VALIDACIÓN CON ZOD
+// ESQUEMA DE VALIDACIÓN CON ZOD, zod es una biblioteca para validación y parsing de datos
 // ============================================================
 const loginSchema = z.object({
   email: z
@@ -45,6 +47,7 @@ const loginSchema = z.object({
     .email('Ingresa un email válido'),
   password: z
     .string()
+    .trim()
     .min(1, 'La contraseña es requerida')
     .min(6, 'La contraseña debe tener al menos 6 caracteres'),
   rememberMe: z.boolean().optional(),
@@ -65,8 +68,9 @@ export default function LoginPage() {
   // Estados locales
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  // Configurar react-hook-form con zod
+  // Configurar react-hook-form con zod, esto nos sirve para manejar formularios y validación
   const {
     register,
     handleSubmit,
@@ -85,6 +89,7 @@ export default function LoginPage() {
   // ============================================================
   const onSubmit = async (data: LoginFormData) => {
     setServerError(null);
+    setFieldErrors({});
 
     try {
       // Llamar al servicio de autenticación
@@ -96,11 +101,18 @@ export default function LoginPage() {
       // Redirigir al dashboard o a la URL original
       router.push(redirectTo);
     } catch (error) {
-      // Mostrar error del servidor
+      // Parsear el error del backend
+      const apiError = error as ApiError;
+      const parsed = parseApiError(apiError);
+      
+      // Si hay errores de campo, mostrarlos
+      if (Object.keys(parsed.fields).length > 0) {
+        setFieldErrors(parsed.fields);
+      }
+      
+      // Mostrar error general
       setServerError(
-        error instanceof Error 
-          ? error.message 
-          : 'Error al iniciar sesión. Intenta nuevamente.'
+        parsed.general || 'Error al iniciar sesión. Intenta nuevamente.'
       );
     }
   };
@@ -172,9 +184,19 @@ export default function LoginPage() {
           {serverError && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-              <div>
+              <div className="flex-1">
                 <p className="text-red-800 font-medium">Error de autenticación</p>
                 <p className="text-red-600 text-sm">{serverError}</p>
+                {/* Mostrar errores de campo si existen */}
+                {Object.keys(fieldErrors).length > 0 && (
+                  <ul className="mt-2 space-y-1">
+                    {Object.entries(fieldErrors).map(([field, message]) => (
+                      <li key={field} className="text-red-600 text-sm">
+                        <span className="font-medium capitalize">{field}:</span> {message}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
           )}

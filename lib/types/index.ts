@@ -20,4 +20,6 @@ export * from './profesional.types';  // ⭐ EJEMPLO COMPLETO
 export * from './auth.types';
 export * from './servicio.types';
 export * from './reserva.types';
+export * from './categoria.types';
+export * from './clientes.types';
 
